@@ -1,77 +1,61 @@
-import re
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
 import requests
-from urllib.parse import urlparse, parse_qs, unquote
-from deets import API_KEY
+from selenium.webdriver.remote.remote_connection import LOGGER
+import logging
 
-def extract_place_id_from_url(google_maps_url):
-    """Tries to extract place_id directly from the URL using regex."""
-    match = re.search(r'!1s([a-zA-Z0-9_-]+)!', google_maps_url)
-    return match.group(1) if match else None
 
-def extract_name_from_url(google_maps_url):
-    """Extracts the restaurant name from the Google Maps URL."""
-    parsed_url = urlparse(google_maps_url)
-    path_parts = parsed_url.path.split("/")
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+LOGGER.setLevel(logging.DEBUG)
+options = webdriver.ChromeOptions()
+options.add_experimental_option("excludeSwitches", ["enable-logging"])
+
+# Replace with the actual URL of the restaurant on Google Maps
+URL = "https://maps.app.goo.gl/sK2EFDvi2uVsve6p9"
+
+# Path to your chromedriver executable
+CHROMEDRIVER_PATH = '/opt/homebrew/bin/chromedriver'
+
+# Initialize the browser
+options = webdriver.ChromeOptions()
+# options.add_argument('--headless')  # Headless mode if you don't need to see the browser
+service = Service(CHROMEDRIVER_PATH)
+driver = webdriver.Chrome(service=service, options=options)
+
+try:
+    driver.get(URL)
     
-    for part in path_parts:
-        if "+" in part:  # Restaurant name is encoded with '+' instead of spaces
-            return unquote(part.replace("+", " "))
+    # Wait for the menu tab to be clickable
+    menu_tab = WebDriverWait(driver, 10).until(
+        EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Menu')]"))
+    )
     
-    return None
-
-def get_place_id_from_api(api_key, query):
-    """Uses Google Places API to get place_id from restaurant name or coordinates."""
-    base_url = "https://maps.googleapis.com/maps/api/place/findplacefromtext/json"
-    params = {
-        "input": query,
-        "inputtype": "textquery",
-        "fields": "place_id",
-        "key": api_key
-    }
+    # Click on the menu tab
+    menu_tab.click()
     
-    response = requests.get(base_url, params=params)
-    data = response.json()
+    # Wait for images to load - this might need adjustment based on network speed
+    time.sleep(5)  # Adjust this delay as needed
     
-    if data.get("status") == "OK":
-        return data["candidates"][0]["place_id"]
-    else:
-        return None
-
-def get_menu_images(api_key, place_id):
-    """Fetches menu images using the Google Places API."""
-    base_url = "https://maps.googleapis.com/maps/api/place/details/json"
-    params = {
-        "place_id": place_id,
-        "fields": "photos",
-        "key": api_key
-    }
+    # Find all images in the menu section
+    images = driver.find_elements(By.CSS_SELECTOR, "img[role='presentation']")
     
-    response = requests.get(base_url, params=params)
-    data = response.json()
-    
-    if "photos" in data.get("result", {}):
-        photo_refs = [photo["photo_reference"] for photo in data["result"]["photos"]]
-        image_urls = [f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photo_reference={ref}&key={api_key}" for ref in photo_refs]
-        return image_urls
-    else:
-        return ["No menu images found."]
+    for i, img in enumerate(images):
+        img_url = img.get_attribute('src')
+        if img_url and img_url.startswith('http'):  # Ensure it's a valid URL
+            # Download the image
+            response = requests.get(img_url)
+            if response.status_code == 200:
+                with open(f'menu_image_{i}.jpg', 'wb') as file:
+                    file.write(response.content)
+            print(f"Image {i} downloaded from {img_url}")
 
-# 🔹 Example Usage
-google_maps_url = "https://www.google.com/maps/place/Vaibhav+Cafe/@19.1177851,72.810114,14z/data=!3m1!5s0x3be7c9cd999f2c13:0x62ae4d3ba4476159!4m10!1m2!2m1!1sRestaurants!3m6!1s0x3be7c9d2647c7265:0x94a596afb2b0a359!8m2!3d19.1177874!4d72.8482205!15sCgtSZXN0YXVyYW50c1oNIgtyZXN0YXVyYW50c5IBF3NvdXRoX2luZGlhbl9yZXN0YXVyYW504AEA!16s%2Fg%2F11c5xcgh61"
+except Exception as e:
+    print(f"An error occurred: {e}")
 
-# Try extracting place_id directly
-place_id = None
+finally:
+    driver.quit()
 
-if not place_id:
-    # If extraction fails, try getting it via the restaurant name
-    restaurant_name = extract_name_from_url(google_maps_url)
-    if restaurant_name:
-        print("Extracted Restaurant Name:", restaurant_name)
-        place_id = get_place_id_from_api(API_KEY, restaurant_name)
-
-if place_id:
-    print("Extracted Place ID:", place_id)
-    menu_images = get_menu_images(API_KEY, place_id)
-    print("Menu Images:", menu_images)
-else:
-    print("Could not extract Place ID.")
