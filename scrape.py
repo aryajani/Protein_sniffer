@@ -22,7 +22,9 @@ driver = webdriver.Chrome(service=service, options=options)
 
 try:
     # Navigate to the URL
-    URL = 'https://maps.app.goo.gl/sK2EFDvi2uVsve6p9'
+    URL = 'https://maps.app.goo.gl/r5XSrc9fMcfkmbdf8'
+    URL2 = 'https://maps.app.goo.gl/T2NW7ruCPQbLXCEQ8'
+    URL1 = 'https://maps.app.goo.gl/sK2EFDvi2uVsve6p9'
     driver.get(URL)
     logging.debug(f"Page loaded: {driver.current_url}")
 
@@ -50,17 +52,17 @@ try:
     menu_tab.click()
     logging.debug("Clicked 'Menu' tab")
 
-    # Wait for menu images to be present using the new XPath
+    # Wait for all menu images to be present using a pattern
     menu_images = WebDriverWait(driver, 20).until(
-        EC.presence_of_all_elements_located((By.XPATH, "//*[@id='QA0Szd']/div/div/div[1]/div[2]/div/div[1]/div/div/div[3]/div[1]/div[1]/div/a/div[1]"))
+        EC.presence_of_all_elements_located((By.XPATH, "//*[@id='QA0Szd']/div/div/div[1]/div[2]/div/div[1]/div/div/div[3]/div[1]/div[position()>0]/div/a/div[1]"))
     )
     
     logging.debug(f"Found {len(menu_images)} menu images")
 
     # Download images
     for i, img in enumerate(menu_images, 1):
-        # Assuming this part of the element directly contains or is the image
-        img_url = img.get_attribute('src')  # or possibly 'data-src' if lazy loading is used
+        # Try to get the image URL
+        img_url = img.get_attribute('src') or img.get_attribute('data-src')  # Check for lazy loading
         if not img_url:
             # If not an img tag, look for background image in style
             style = img.get_attribute('style')
@@ -80,6 +82,21 @@ try:
                 logging.warning(f"Failed to download image from {img_url}")
         else:
             logging.warning(f"Could not find valid URL for image {i}")
+
+    # If there's more content to load, scroll down
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    time.sleep(5)  # Wait for new images to load
+
+    # Check for newly loaded images
+    new_images = WebDriverWait(driver, 10).until(
+        EC.presence_of_all_elements_located((By.XPATH, "//*[@id='QA0Szd']/div/div/div[1]/div[2]/div/div[1]/div/div/div[3]/div[1]/div[position()>0]/div/a/div[1]"))
+    )
+    new_images_found = [img for img in new_images if img not in menu_images]
+    if new_images_found:
+        logging.debug(f"Found {len(new_images_found)} new menu images after scrolling")
+        for i, img in enumerate(new_images_found, len(menu_images) + 1):
+            # ... (same image download logic as above)
+            pass
 
 except Exception as e:
     logging.error(f"An error occurred: {e}")
