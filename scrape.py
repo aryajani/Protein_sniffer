@@ -22,8 +22,8 @@ driver = webdriver.Chrome(service=service, options=options)
 
 try:
     # Navigate to the URL
-    URL = 'https://maps.app.goo.gl/r5XSrc9fMcfkmbdf8'
-    URL2 = 'https://maps.app.goo.gl/T2NW7ruCPQbLXCEQ8'
+    URL2 = 'https://maps.app.goo.gl/r5XSrc9fMcfkmbdf8'
+    URL = 'https://maps.app.goo.gl/T2NW7ruCPQbLXCEQ8'
     URL1 = 'https://maps.app.goo.gl/sK2EFDvi2uVsve6p9'
     driver.get(URL)
     logging.debug(f"Page loaded: {driver.current_url}")
